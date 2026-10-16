@@ -1,0 +1,17 @@
+package com.adidas.dto.request;
+
+import jakarta.validation.constraints.NotBlank;
+import lombok.*;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class UserLoginRequestDTO {
+    @NotBlank(message = "Tên đăng nhập hoặc email không được để trống")
+    private String username;
+
+    @NotBlank(message = "Mật khẩu không được để trống")
+    private String password;
+}
