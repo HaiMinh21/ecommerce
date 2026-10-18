@@ -7,10 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping(value = "/api/v1/products")
@@ -37,5 +34,19 @@ public class ProductController implements IProductController{
     public ResponseEntity<Page<ProductResponseDTO>> getAllProducts(int page, int size, String keyword, Long categoryId) {
         Page<ProductResponseDTO> productResponseDTO = productService.getAllProducts(page, size, keyword, categoryId);
         return new ResponseEntity<>(productResponseDTO, HttpStatus.ACCEPTED);
+    }
+
+    @Override
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductResponseDTO> updateProduct(Long id, ProductRequestDTO productRequestDTO) {
+        ProductResponseDTO productResponseDTO = productService.updateProduct(id, productRequestDTO);
+        return new ResponseEntity<>(productResponseDTO, HttpStatus.OK);
+    }
+
+    @Override
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ProductResponseDTO> deleteProduct(Long id) {
+        productService.deleteByProductId(id);
+        return ResponseEntity.noContent().build();
     }
 }

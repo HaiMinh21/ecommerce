@@ -18,4 +18,8 @@ public interface IProductController {
 
     @GetMapping
     ResponseEntity<Page<ProductResponseDTO>> getAllProducts(@RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size, @RequestParam(required = false) String keyword, @RequestParam(required = false) Long categoryId);
+
+    ResponseEntity<ProductResponseDTO> updateProduct(@PathVariable Long id, @Valid @RequestBody ProductRequestDTO productRequestDTO);
+
+    ResponseEntity<ProductResponseDTO> deleteProduct(@PathVariable Long id);
 }

@@ -8,6 +8,7 @@ import java.util.List;
 
 @Repository
 public interface ICategoryRepository extends JpaRepository<Category, Long> {
+    boolean existsBySlug(String slug);
     List<Category> findByParentIsNull();
     List<Category> findByParentId(Long parentId);
 }
