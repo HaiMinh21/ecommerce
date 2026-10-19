@@ -192,11 +192,83 @@ public class ProductService implements IProductService{
     @Override
     @Transactional
     public ProductResponseDTO updateProduct(Long id, ProductRequestDTO productRequestDTO) {
-        return null;
+        Products product = productRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm có id là: " + id));
+        Category category = categoryRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Khng tìm thấy danh mục sản phẩm có id là: " + productRequestDTO.getCategoryId()));
+
+        // cập nhật thông tin
+        product.setName(productRequestDTO.getName());
+        product.setSlug(productRequestDTO.getSlug());
+        product.setDescription(productRequestDTO.getDescription());
+        product.setPrice(productRequestDTO.getPrice());
+        product.setStockQuantity(productRequestDTO.getStockQuantity());
+        product.setSku(productRequestDTO.getSku());
+        if (productRequestDTO.getStatus() != null) {
+            product.setStatus(productRequestDTO.getStatus());
+        }
+        product.setCategory(category);
+
+        Products savedProduct = productRepository.save(product);
+
+        // xóa dữ liệu cũ trước khi thêm
+        productImageRepository.deleteByProductId(id);
+        productVariantRepository.deleteByProductId(id);
+
+        productImageRepository.flush();
+        productVariantRepository.flush();
+
+        // lưu ảnh mới
+        List<ProductImage> productImages = new ArrayList<>();
+        if (productRequestDTO.getMainImageUrl() != null && !productRequestDTO.getMainImageUrl().isBlank()) {
+            ProductImage mainImage = new ProductImage();
+            mainImage.setProduct(savedProduct);
+            mainImage.setImageUrl(productRequestDTO.getMainImageUrl());
+            mainImage.setMain(true);
+            productImages.add(mainImage);
+        }
+        if (productRequestDTO.getImageUrls() != null && !productRequestDTO.getImageUrls().isEmpty()) {
+            for (String url : productRequestDTO.getImageUrls()) {
+                ProductImage images = new ProductImage();
+                images.setProduct(savedProduct);
+                images.setImageUrl(url);
+                images.setMain(false);
+                productImages.add(images);
+            }
+        }
+        if (!productImages.isEmpty()) {
+            productImageRepository.saveAll(productImages);
+        }
+
+        // lưu các biến thể mới
+        List<ProductVariant> productVariants = new ArrayList<>();
+        if (productRequestDTO.getVariants() != null && !productRequestDTO.getVariants().isEmpty()) {
+            for (ProductVariantRequestDTO variantsRequestDTO : productRequestDTO.getVariants()) {
+                ProductVariant variant = modelMapper.map(variantsRequestDTO, ProductVariant.class);
+                variant.setProduct(savedProduct);
+                if (variant.getPrice() == null) {
+                    variant.setPrice(savedProduct.getPrice());
+                }
+                if (variant.getStockQuantity() == null) {
+                    variant.setStockQuantity(savedProduct.getStockQuantity());
+                }
+                productVariants.add(variant);
+            }
+            productVariantRepository.saveAll(productVariants);
+        }
+        return getProductById(id);
     }
 
     @Override
-    public void deleteProduct(Long id) {
+    @Transactional
+    public void deleteByProductId(Long id) {
+        if (!productRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Không tìm thấy sản phẩm có id là: " + id);
+        }
+        productImageRepository.deleteByProductId(id);
+        productVariantRepository.deleteByProductId(id);
 
+        productImageRepository.flush();
+        productVariantRepository.flush();
+
+        productRepository.deleteById(id);
     }
 }

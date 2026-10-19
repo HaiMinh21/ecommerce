@@ -35,4 +35,18 @@ public class ProductController implements IProductController{
         Page<ProductResponseDTO> productResponseDTO = productService.getAllProducts(page, size, keyword, categoryId);
         return new ResponseEntity<>(productResponseDTO, HttpStatus.ACCEPTED);
     }
+
+    @Override
+    @PutMapping("/{id}")
+    public ResponseEntity<ProductResponseDTO> updateProduct(Long id, ProductRequestDTO productRequestDTO) {
+        ProductResponseDTO productResponseDTO = productService.updateProduct(id, productRequestDTO);
+        return new ResponseEntity<>(productResponseDTO, HttpStatus.OK);
+    }
+
+    @Override
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ProductResponseDTO> deleteProduct(Long id) {
+        productService.deleteByProductId(id);
+        return ResponseEntity.noContent().build();
+    }
 }
