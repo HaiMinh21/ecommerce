@@ -12,4 +12,8 @@ public interface ICategoryService {
     List<CategoryResponseDTO> getCategoryTree();
 
     CategoryResponseDTO mapToDTO(Category category);
+
+    CategoryResponseDTO updateCategory(Long id, CategoryRequestDTO categoryRequestDTO);
+
+    void deleteCategory(Long id);
 }

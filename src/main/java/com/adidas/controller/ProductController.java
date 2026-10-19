@@ -24,6 +24,7 @@ public class ProductController implements IProductController{
     }
 
     @Override
+    @GetMapping("/{id}")
     public ResponseEntity<ProductResponseDTO> getProductById(Long id) {
         ProductResponseDTO productResponseDTO = productService.getProductById(id);
         return new ResponseEntity<>(productResponseDTO, HttpStatus.ACCEPTED);

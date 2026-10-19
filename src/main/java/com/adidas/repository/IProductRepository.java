@@ -17,6 +17,7 @@ public interface IProductRepository extends JpaRepository<Products, Long> {
     // kiểm tra xem đã tồn tại slug chưa
     boolean existsBySlug(String slug);
     boolean existsBySku(String sku);
+    boolean existsByCategoryId(Long id);
 
     Page<Products> findByCategoryIdAndStatus(Long categoryId, ProductStatus status, Pageable pageable);
     Page<Products> findByStatus(ProductStatus status, Pageable pageable);

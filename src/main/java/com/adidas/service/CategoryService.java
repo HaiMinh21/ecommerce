@@ -6,20 +6,25 @@ import com.adidas.entity.Category;
 import com.adidas.exception.BadRequestException;
 import com.adidas.exception.ResourceNotFoundException;
 import com.adidas.repository.ICategoryRepository;
+import com.adidas.repository.IProductRepository;
 import org.modelmapper.ModelMapper;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Service
 public class CategoryService implements ICategoryService{
 
     private ICategoryRepository categoryRepository;
+    private final IProductRepository productRepository;
     private final ModelMapper modelMapper;
 
-    public CategoryService(ICategoryRepository categoryRepository, ModelMapper modelMapper) {
-        this.categoryRepository = categoryRepository;
+    public CategoryService(IProductRepository productRepository, ModelMapper modelMapper, ICategoryRepository categoryRepository) {
+        this.productRepository = productRepository;
         this.modelMapper = modelMapper;
+        this.categoryRepository = categoryRepository;
     }
 
     @Override
@@ -32,7 +37,7 @@ public class CategoryService implements ICategoryService{
 
         // Người dùng truyền parentId để tạo danh mục cấp 2, cấp 3
         if (categoryRequestDTO.getParentId() != null) {
-            Category categoryParent = categoryRepository.findById(category.getId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục có id là: " + categoryRequestDTO.getParentId()));
+            Category categoryParent = categoryRepository.findById(categoryRequestDTO.getParentId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục có id là: " + categoryRequestDTO.getParentId()));
             category.setParent(categoryParent);
         }
         Category savedCategory = categoryRepository.save(category);
@@ -67,5 +72,44 @@ public class CategoryService implements ICategoryService{
         }
 
         return dto;
+    }
+
+    @Override
+    @Transactional
+    public CategoryResponseDTO updateCategory(Long id, CategoryRequestDTO categoryRequestDTO) {
+        Category category = categoryRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục có id: " + id));
+        if (categoryRepository.existsBySlugAndIdNot(categoryRequestDTO.getSlug(), id)) {
+            throw new BadRequestException("Đường dẫn danh mục đã tồn tại!");
+        }
+        if (categoryRequestDTO.getParentId() != null) {
+            if (categoryRequestDTO.getParentId().equals(id)) {
+                throw new BadRequestException("Danh mục không thể làm cha của chính mình");
+            }
+            Category parent = categoryRepository.findById(categoryRequestDTO.getParentId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy danh mục cha"));
+            category.setParent(parent);
+        } else {
+            category.setParent(null);
+        }
+
+        category.setName(categoryRequestDTO.getName());
+        category.setSlug(categoryRequestDTO.getSlug());
+        category.setDescription(categoryRequestDTO.getDescription());
+
+        Category updateCategory = categoryRepository.save(category);
+        return mapToDTO(updateCategory);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCategory(Long id) {
+        Category category = categoryRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dang mục sản phẩm có id là: " + id));
+        if (categoryRepository.existsByParentId(id)) {
+            throw new BadRequestException("Không thể xóa! vui lòng xóa hoặc di chuyển danh mục con trước");
+        }
+        if (productRepository.existsByCategoryId(id)) {
+            throw new BadRequestException("Không thể xóa danh mục đang có sản phẩm");
+        }
+
+        categoryRepository.delete(category);
     }
 }
