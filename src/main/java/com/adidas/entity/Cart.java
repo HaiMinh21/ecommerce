@@ -8,7 +8,10 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Getter
 @Setter
@@ -21,12 +24,17 @@ public class Cart {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", nullable = false, unique = true)
     private Users user;
+
+    @Column(name = "total_price", precision = 15, scale = 2)
+    private BigDecimal totalPrice = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     private CartStatus status = CartStatus.ACTIVE;
+
+    private List<CartItem> cartItems = new ArrayList<>();
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
