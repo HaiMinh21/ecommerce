@@ -15,6 +15,8 @@ public class CartItemResponseDTO {
     private String productName;
     private String productSlug;
     private String productImageUrl;
+    private Long productVariantId;
+    private String variantName;
     private Integer quantity;
     private BigDecimal price;
     private BigDecimal subtotal;
@@ -81,5 +83,21 @@ public class CartItemResponseDTO {
 
     public void setSubtotal(BigDecimal subtotal) {
         this.subtotal = subtotal;
+    }
+
+    public Long getProductVariantId() {
+        return productVariantId;
+    }
+
+    public void setProductVariantId(Long productVariantId) {
+        this.productVariantId = productVariantId;
+    }
+
+    public String getVariantName() {
+        return variantName;
+    }
+
+    public void setVariantName(String variantName) {
+        this.variantName = variantName;
     }
 }

@@ -11,7 +11,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CartResponseDTO {
+public class CartRequestDTO {
     private Long id;
 
     private Long userId;

@@ -16,9 +16,11 @@ public class CartResponseDTO {
 
     private Long userId;
 
-    private List<CartItemResponseDTO> items;
+    private String status;
 
-    private BigDecimal totalEstimatedPrice;
+    private BigDecimal totalPrice;
+
+    private List<CartItemResponseDTO> cartItems;
 
     public Long getId() {
         return id;
@@ -36,19 +38,27 @@ public class CartResponseDTO {
         this.userId = userId;
     }
 
-    public List<CartItemResponseDTO> getItems() {
-        return items;
+    public String getStatus() {
+        return status;
     }
 
-    public void setItems(List<CartItemResponseDTO> items) {
-        this.items = items;
+    public void setStatus(String status) {
+        this.status = status;
     }
 
-    public BigDecimal getTotalEstimatedPrice() {
-        return totalEstimatedPrice;
+    public BigDecimal getTotalPrice() {
+        return totalPrice;
     }
 
-    public void setTotalEstimatedPrice(BigDecimal totalEstimatedPrice) {
-        this.totalEstimatedPrice = totalEstimatedPrice;
+    public void setTotalPrice(BigDecimal totalPrice) {
+        this.totalPrice = totalPrice;
+    }
+
+    public List<CartItemResponseDTO> getCartItems() {
+        return cartItems;
+    }
+
+    public void setCartItems(List<CartItemResponseDTO> cartItems) {
+        this.cartItems = cartItems;
     }
 }
