@@ -12,4 +12,8 @@ public interface ICartService {
 
     CartResponseDTO addToCart (Long userId, CartItemRequestDTO cartItemRequestDTO);
 
+    CartResponseDTO updateCartItemQuantity(Long userId, Long cartItemId, Integer quantity);
+
+    CartResponseDTO removeCartItem(Long userId, Long cartItemId);
+
 }

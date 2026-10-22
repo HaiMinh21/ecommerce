@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Service
-public class CartService implements ICartService{
+public class CartService implements ICartService {
 
     private final ICartRepository cartRepository;
 
@@ -28,12 +28,15 @@ public class CartService implements ICartService{
 
     private final IProductVariantRepository productVariantRepository;
 
-    public CartService(ICartRepository cartRepository, IProductImageRepository productImageRepository, ICartItemRepository cartItemRepository, IProductRepository productRepository, IProductVariantRepository productVariantRepository) {
+    private final IUserRepository userRepository;
+
+    public CartService(ICartRepository cartRepository, IProductImageRepository productImageRepository, ICartItemRepository cartItemRepository, IProductRepository productRepository, IProductVariantRepository productVariantRepository, IUserRepository userRepository) {
         this.cartRepository = cartRepository;
         this.productImageRepository = productImageRepository;
         this.cartItemRepository = cartItemRepository;
         this.productRepository = productRepository;
         this.productVariantRepository = productVariantRepository;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -86,14 +89,16 @@ public class CartService implements ICartService{
     public CartResponseDTO addToCart(Long userId, CartItemRequestDTO cartItemRequestDTO) {
         Cart cart = cartRepository.findByUserId(userId).orElse(null);
         if (cart == null) {
+            Users user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng có id là: " + userId));
             cart = new Cart();
+            cart.setUser(user);
             cart.setTotalPrice(BigDecimal.ZERO);
             cart = cartRepository.save(cart);
         }
 
         // hiển thị sản phẩm và biến thể
         Products product = productRepository.findById(cartItemRequestDTO.getProductId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm"));
-        ProductVariant productVariant = productVariantRepository.findById(cartItemRequestDTO.getProductId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phân loại hàng"));
+        ProductVariant productVariant = productVariantRepository.findById(cartItemRequestDTO.getProductVariantId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phân loại hàng"));
 
         // check biến thể này thuộc về sản phẩm kia
         if (!productVariant.getProduct().getId().equals(product.getId())) {
@@ -133,6 +138,51 @@ public class CartService implements ICartService{
         cart.setTotalPrice(newTotal);
         cartRepository.save(cart);
 
+        return getCartByUserId(userId);
+    }
+
+    private void recalculateCartTotal(Cart cart) {
+        BigDecimal newTotal = BigDecimal.ZERO;
+        for (CartItem item : cart.getCartItems()) {
+            newTotal = newTotal.add(item.getPrice().multiply(new BigDecimal(item.getQuantity())));
+        }
+        cart.setTotalPrice(newTotal);
+        cartRepository.save(cart);
+    }
+
+    @Override
+    @Transactional
+    public CartResponseDTO updateCartItemQuantity(Long userId, Long cartItemId, Integer quantity) {
+        Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng!"));
+        CartItem cartItem = cartItemRepository.findById(cartItemId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm trong giỏ hàng"));
+
+        if (!cartItem.getCart().getId().equals(cart.getId())) {
+            throw new BadRequestException("Sản phẩm không thuộc giỏ hàng của bạn");
+        }
+        if (quantity <= 0) {
+            return removeCartItem(userId, cartItemId);
+        }
+        if (quantity > cartItem.getProduct().getStockQuantity()) {
+            throw new BadRequestException("Số lượng vượt quá số lượng sản phẩm trong kho");
+        }
+        cartItem.setQuantity(quantity);
+        cartItemRepository.save(cartItem);
+        recalculateCartTotal(cart);
+        return getCartByUserId(userId);
+    }
+
+    @Override
+    @Transactional
+    public CartResponseDTO removeCartItem(Long userId, Long cartItemId) {
+        Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng"));
+        CartItem cartItem = cartItemRepository.findById(cartItemId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm trong giỏ hàng"));
+
+        if (!cartItem.getCart().getId().equals(cart.getId())) {
+            throw new BadRequestException("Sản phẩm không thuộc giỏ hàng của bạn");
+        }
+        cartItemRepository.delete(cartItem);
+        cart.getCartItems().remove(cartItem);
+        recalculateCartTotal(cart);
         return getCartByUserId(userId);
     }
 }

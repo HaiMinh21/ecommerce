@@ -19,16 +19,30 @@ public class CartController implements ICartController {
     }
 
     @Override
-    @GetMapping("/users/{userId}")
+    @GetMapping("/user/{userId}")
     public ResponseEntity<CartResponseDTO> getCartByUserId(@PathVariable Long userId) {
         CartResponseDTO cartResponseDTO = cartService.getCartByUserId(userId);
         return ResponseEntity.ok(cartResponseDTO);
     }
 
     @Override
-    @PostMapping("/users/{userId}")
+    @PostMapping("/user/{userId}")
     public ResponseEntity<CartResponseDTO> addToCart(@PathVariable Long userId,@Valid @RequestBody CartItemRequestDTO cartItemRequestDTO) {
         CartResponseDTO cartResponseDTO = cartService.addToCart(userId, cartItemRequestDTO);
         return ResponseEntity.ok(cartResponseDTO);
+    }
+
+    @Override
+    @PutMapping("/user/{userId}/items/{cartItemId}")
+    public ResponseEntity<CartResponseDTO> updateCartItemQuantity(Long userId, Long cartItemId, Integer quantity) {
+        CartResponseDTO updateCart = cartService.updateCartItemQuantity(userId, cartItemId, quantity);
+        return ResponseEntity.ok(updateCart);
+    }
+
+    @Override
+    @DeleteMapping("/user/{userId}/items/{cartItemId}")
+    public ResponseEntity<CartResponseDTO> removeCartItem(Long userId, Long cartItemId) {
+        CartResponseDTO removeCart = cartService.removeCartItem(userId, cartItemId);
+        return ResponseEntity.ok(removeCart);
     }
 }
