@@ -11,7 +11,12 @@ import java.util.Optional;
 
 @Repository
 public interface IOrderRepository extends JpaRepository<Order, Long> {
+
+    // tìm đơn hàng theo mã giao dịch
     Optional<Order> findByOrderCode(String orderCode);
+
     Page<Order> findByUserId(Long userId, Pageable pageable);
+
+    // lấy đơn hàng của user theo trạng thái: đang giao, đã hủy
     Page<Order> findByUserIdAndStatus(Long userId, OrderStatus status, Pageable pageable);
 }

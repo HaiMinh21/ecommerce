@@ -13,9 +13,11 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class OrderResponseDTO {
+
     private Long id;
     private String orderCode;
     private Long userId;
+
     private String receiverName;
     private String phone;
     private String deliveryAddress;
