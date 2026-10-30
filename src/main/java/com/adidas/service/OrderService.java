@@ -9,6 +9,7 @@ import com.adidas.exception.BadRequestException;
 import com.adidas.exception.ResourceNotFoundException;
 import com.adidas.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,14 +27,16 @@ public class OrderService implements IOrderService {
     private final IUserRepository userRepository;
     private final IAddressRepository addressRepository;
     private final ICouponRepository couponRepository;
+    private final IProductImageRepository productImageRepository;
 
-    public OrderService(IOrderRepository orderRepository, ICartRepository cartRepository, IProductVariantRepository productVariantRepository, IUserRepository userRepository, IAddressRepository addressRepository, ICouponRepository couponRepository) {
+    public OrderService(IOrderRepository orderRepository, ICartRepository cartRepository, IProductVariantRepository productVariantRepository, IUserRepository userRepository, IAddressRepository addressRepository, ICouponRepository couponRepository, IProductImageRepository productImageRepository) {
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
         this.productVariantRepository = productVariantRepository;
         this.userRepository = userRepository;
         this.addressRepository = addressRepository;
         this.couponRepository = couponRepository;
+        this.productImageRepository = productImageRepository;
     }
 
     @Override
@@ -41,13 +44,13 @@ public class OrderService implements IOrderService {
     public OrderResponseDTO checkout(Long userId, OrderRequestDTO orderRequestDTO) {
         // Lấy và kiểm tra giỏ hàng
         Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng"));
-        if (cart.getCartItems() == null && !cart.getCartItems().isEmpty()) {
+        if (cart.getCartItems() == null || cart.getCartItems().isEmpty()) {
             throw new BadRequestException("Giỏ hàng của bạn đang trống. Không thể đặt hàng");
         }
         Users user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
         // kiểm tra địa chỉ và mã giảm giá
-        Address address = addressRepository.findById(orderRequestDTO.getAddressId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đại chỉ giao hàng"));
+        Address address = addressRepository.findById(orderRequestDTO.getAddressId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa chỉ giao hàng"));
 
         Coupon coupon = null;
         BigDecimal cartTotal = cart.getTotalPrice();
@@ -116,6 +119,7 @@ public class OrderService implements IOrderService {
             orderItem.setOrder(order);
             orderItem.setProduct(cartItem.getProduct());
             orderItem.setProductVariant(productVariant);
+            orderItem.setProductName(cartItem.getProduct().getName());
             orderItem.setQuantity(cartItem.getQuantity());
             orderItem.setPrice(cartItem.getPrice());
             orderItem.setSubtotal(subtotal);
@@ -149,12 +153,26 @@ public class OrderService implements IOrderService {
         List<OrderItemResponseDTO> itemResponseDTOS = new ArrayList<>();
         for (OrderItem item : order.getOrderItems()) {
             String mainImageUrl = null;
+            List<ProductImage> images = productImageRepository.findByProductId(item.getProduct().getId());
+            for (ProductImage img : images) {
+                if (Boolean.TRUE.equals(img.getIsMain())) {
+                    mainImageUrl = img.getImageUrl();
+                    break;
+                }
+            }
 
             OrderItemResponseDTO orderItemResponseDTO = OrderItemResponseDTO.builder()
                     .id(item.getId())
                     .productId(item.getProduct().getId())
                     .productName(item.getProduct().getName())
-                    .productImageUrl(mainImageUrl);
+                    .productImageUrl(mainImageUrl)
+                    .productVariantId(item.getProductVariant().getId())
+                    .variantName(item.getProductVariant().getVariantName())
+                    .quantity(item.getQuantity())
+                    .price(item.getPrice())
+                    .subtotal(item.getSubtotal())
+                    .build();
+            itemResponseDTOS.add(orderItemResponseDTO);
         }
 
         return OrderResponseDTO.builder()
@@ -178,5 +196,83 @@ public class OrderService implements IOrderService {
                         .transactionId(null)
                         .paidAt(null).build())
                 .items(itemResponseDTOS).build();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderResponseDTO cancelOrder(Long userId, Long orderId) {
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng của bạn"));
+        if (!order.getUser().getId().equals(userId)) {
+            throw new BadRequestException("Bạn không có quyền hủy đơn hàng của người khác");
+        }
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new BadRequestException("Chỉ có thể hủy đơn hàng ở trạng thái chờ xác nhận (Pending). Trạng thái hiện tại: " + order.getStatus());
+        }
+        // tra lại số lượng tồn kho
+        for (OrderItem item : order.getOrderItems()) {
+            ProductVariant variant = item.getProductVariant();
+            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+            productVariantRepository.save(variant);
+        }
+        // cập nhật trạng thái đơn hàng
+        order.setStatus(OrderStatus.CANCELLED);
+
+        String currentNote = order.getNote() != null ? order.getNote() : "";
+        order.setNote(currentNote + "Hệ thống: Khách hàng tự hủy đơn");
+
+        Order savedOrder = orderRepository.save(order);
+        List<OrderItemResponseDTO> itemResponseDTOS = new ArrayList<>();
+        for (OrderItem item : savedOrder.getOrderItems()) {
+            String mainImageUrl = null;
+            List<ProductImage> images = productImageRepository.findByProductId(item.getProduct().getId());
+            for (ProductImage img : images) {
+                if (Boolean.TRUE.equals(img.getIsMain())) {
+                    mainImageUrl = img.getImageUrl();
+                    break;
+                }
+            }
+
+            OrderItemResponseDTO orderItemResponseDTO = OrderItemResponseDTO.builder()
+                    .id(item.getId())
+                    .productId(item.getProduct().getId())
+                    .productName(item.getProduct().getName())
+                    .productImageUrl(mainImageUrl)
+                    .productVariantId(item.getProductVariant().getId())
+                    .variantName(item.getProductVariant().getVariantName())
+                    .quantity(item.getQuantity())
+                    .price(item.getPrice())
+                    .subtotal(item.getSubtotal())
+                    .build();
+            itemResponseDTOS.add(orderItemResponseDTO);
+        }
+
+        BigDecimal discountAmount = savedOrder.getTotalAmount().add(savedOrder.getShippingFee()).subtract(savedOrder.getFinalAmount());
+
+        return OrderResponseDTO.builder()
+                .id(savedOrder.getId())
+                .orderCode(savedOrder.getOrderCode())
+                .userId(savedOrder.getUser().getId())
+                .receiverName(order.getAddress().getReceiverName())
+                .phone(order.getAddress().getPhone())
+                .deliveryAddress(order.getAddress().getFullAddress())
+                .totalAmount(order.getTotalAmount())
+                .shippingFee(order.getShippingFee())
+                .discountAmount(discountAmount)
+                .finalAmount(order.getFinalAmount())
+                .status(order.getStatus())
+                .note(order.getNote())
+                .createdAt(order.getCreatedAt())
+                .payment(PaymentResponseDTO.builder()
+                        .paymentMethod(order.getPaymentMethod())
+                        .status(order.getPaymentStatus())
+                        .amount(order.getFinalAmount())
+                        .transactionId(null)
+                        .paidAt(null).build())
+                .items(itemResponseDTOS).build();
+    }
+
+    @Override
+    public Page<OrderResponseDTO> getOrderHistory(Long userId, int page, int size) {
+        return null;
     }
 }
