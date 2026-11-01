@@ -6,6 +6,7 @@ import com.adidas.service.IOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,5 +30,12 @@ public class OrderController implements IOrderController{
     public ResponseEntity<OrderResponseDTO> cancelOrder(@PathVariable Long userId,@PathVariable Long orderId) {
         OrderResponseDTO orderResponseDTO = orderService.cancelOrder(userId, orderId);
         return ResponseEntity.ok(orderResponseDTO);
+    }
+
+    @Override
+    @GetMapping("users/{userId}/history")
+    public ResponseEntity<Page<OrderResponseDTO>> getOrderHistory(@PathVariable Long userId,@RequestParam(defaultValue = "0") int page,@RequestParam(defaultValue = "10") int size) {
+        Page<OrderResponseDTO> orderResponseDTOS = orderService.getOrderHistory(userId, page, size);
+        return ResponseEntity.ok(orderResponseDTOS);
     }
 }

@@ -12,5 +12,6 @@ public interface IOrderService {
 
     OrderResponseDTO cancelOrder (Long userId, Long orderId);
 
-    Page<OrderResponseDTO> getOrderHistory (Long userId, int page, int size)
+    // lấy danh sách lịch sử đơn hàng
+    Page<OrderResponseDTO> getOrderHistory (Long userId, int page, int size);
 }

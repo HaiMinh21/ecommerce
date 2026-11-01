@@ -9,7 +9,7 @@ import com.adidas.exception.BadRequestException;
 import com.adidas.exception.ResourceNotFoundException;
 import com.adidas.repository.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -273,6 +273,61 @@ public class OrderService implements IOrderService {
 
     @Override
     public Page<OrderResponseDTO> getOrderHistory(Long userId, int page, int size) {
-        return null;
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<Order> orders = orderRepository.findByUserId(userId, pageable);
+        List<OrderResponseDTO> itemResponseDTOList = new ArrayList<>();
+        for (Order order : orders.getContent()) {
+            List<OrderItemResponseDTO> itemResponseDTOS = new ArrayList<>();
+            for (OrderItem item : order.getOrderItems()) {
+                String mainImageUrl = null;
+                List<ProductImage> images = productImageRepository.findByProductId(item.getProduct().getId());
+                for (ProductImage img : images) {
+                    if (Boolean.TRUE.equals(img.getIsMain())) {
+                        mainImageUrl = img.getImageUrl();
+                        break;
+                    }
+                }
+
+                OrderItemResponseDTO orderItemResponseDTO = OrderItemResponseDTO.builder()
+                        .id(item.getId())
+                        .productId(item.getProduct().getId())
+                        .productName(item.getProduct().getName())
+                        .productImageUrl(mainImageUrl)
+                        .productVariantId(item.getProductVariant().getId())
+                        .variantName(item.getProductVariant().getVariantName())
+                        .quantity(item.getQuantity())
+                        .price(item.getPrice())
+                        .subtotal(item.getSubtotal())
+                        .build();
+                itemResponseDTOS.add(orderItemResponseDTO);
+            }
+            BigDecimal discountAmount = order.getTotalAmount().add(order.getShippingFee()).subtract(order.getFinalAmount());
+
+            OrderResponseDTO dto = OrderResponseDTO.builder()
+                    .id(order.getId())
+                    .orderCode(order.getOrderCode())
+                    .userId(order.getUser().getId())
+                    .receiverName(order.getAddress().getReceiverName())
+                    .phone(order.getAddress().getPhone())
+                    .deliveryAddress(order.getAddress().getFullAddress())
+                    .totalAmount(order.getTotalAmount())
+                    .shippingFee(order.getShippingFee())
+                    .discountAmount(discountAmount)
+                    .finalAmount(order.getFinalAmount())
+                    .status(order.getStatus())
+                    .note(order.getNote())
+                    .createdAt(order.getCreatedAt())
+                    .payment(PaymentResponseDTO.builder()
+                            .paymentMethod(order.getPaymentMethod())
+                            .status(order.getPaymentStatus())
+                            .amount(order.getFinalAmount())
+                            .transactionId(null)
+                            .paidAt(null)
+                            .build())
+                    .items(itemResponseDTOS)
+                    .build();
+            itemResponseDTOList.add(dto);
+        }
+        return new PageImpl<>(itemResponseDTOList, pageable, orders.getTotalElements());
     }
 }
