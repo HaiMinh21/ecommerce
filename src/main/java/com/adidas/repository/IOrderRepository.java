@@ -19,4 +19,6 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
 
     // lấy đơn hàng của user theo trạng thái: đang giao, đã hủy
     Page<Order> findByUserIdAndStatus(Long userId, OrderStatus status, Pageable pageable);
+
+    Page<Order> findByStatus(OrderStatus orderStatus, Pageable pageable);
 }

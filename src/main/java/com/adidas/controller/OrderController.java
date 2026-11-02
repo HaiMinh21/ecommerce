@@ -2,6 +2,7 @@ package com.adidas.controller;
 
 import com.adidas.dto.request.OrderRequestDTO;
 import com.adidas.dto.response.OrderResponseDTO;
+import com.adidas.entity.OrderStatus;
 import com.adidas.service.IOrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,8 +35,22 @@ public class OrderController implements IOrderController{
 
     @Override
     @GetMapping("users/{userId}/history")
-    public ResponseEntity<Page<OrderResponseDTO>> getOrderHistory(@PathVariable Long userId,@RequestParam(defaultValue = "0") int page,@RequestParam(defaultValue = "10") int size) {
-        Page<OrderResponseDTO> orderResponseDTOS = orderService.getOrderHistory(userId, page, size);
+    public ResponseEntity<Page<OrderResponseDTO>> getOrderHistory(@PathVariable Long userId, @RequestParam(required = false) OrderStatus status, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "10") int size) {
+        Page<OrderResponseDTO> orderResponseDTOS = orderService.getOrderHistory(userId, status, page, size);
         return ResponseEntity.ok(orderResponseDTOS);
+    }
+
+    @Override
+    @GetMapping("/{orderCode}")
+    public ResponseEntity<OrderResponseDTO> getOrderByCode(@PathVariable String orderCode) {
+        OrderResponseDTO orderResponseDTO = orderService.getOrderByCode(orderCode);
+        return ResponseEntity.ok(orderResponseDTO);
+    }
+
+    @Override
+    @GetMapping("/admin")
+    public ResponseEntity<Page<OrderResponseDTO>> getAllOrdersForAdmin(@RequestParam(required = false) OrderStatus orderStatus,@RequestParam(defaultValue = "0") int page,@RequestParam(defaultValue = "10") int size) {
+        Page<OrderResponseDTO> orders = orderService.getAllOrdersForAdmin(orderStatus, page, size);
+        return ResponseEntity.ok(orders);
     }
 }
