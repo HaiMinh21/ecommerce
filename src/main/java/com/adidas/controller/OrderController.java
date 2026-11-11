@@ -11,6 +11,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
@@ -52,5 +56,23 @@ public class OrderController implements IOrderController{
     public ResponseEntity<Page<OrderResponseDTO>> getAllOrdersForAdmin(@RequestParam(required = false) OrderStatus orderStatus,@RequestParam(defaultValue = "0") int page,@RequestParam(defaultValue = "10") int size) {
         Page<OrderResponseDTO> orders = orderService.getAllOrdersForAdmin(orderStatus, page, size);
         return ResponseEntity.ok(orders);
+    }
+
+    @Override
+    @PutMapping("/admin/status/{orderId}")
+    public ResponseEntity<OrderResponseDTO> updateOrderStatus(@PathVariable Long orderId,@RequestParam OrderStatus newStatus) {
+        OrderResponseDTO updateOrder = orderService.updateOrderStatus(orderId, newStatus);
+        return ResponseEntity.ok(updateOrder);
+    }
+
+    @Override
+    @GetMapping("/admin/revenue")
+    public ResponseEntity getTotalRevenue() {
+        BigDecimal totalRevenue = orderService.getTotalRevenue();
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Tổng doanh thu các đơn hàng đã giao thành công");
+        response.put("total", totalRevenue);
+        response.put("currency", "VND");
+        return ResponseEntity.ok(response);
     }
 }

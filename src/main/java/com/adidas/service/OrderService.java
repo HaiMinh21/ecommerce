@@ -13,6 +13,7 @@ import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.awt.font.FontRenderContext;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -453,5 +454,74 @@ public class OrderService implements IOrderService {
             orderResponseDTOList.add(dto);
         }
         return new PageImpl<>(orderResponseDTOList, pageable, orderPage.getTotalElements());
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public OrderResponseDTO updateOrderStatus(Long orderId, OrderStatus newStatus) {
+        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn có ID là: " + orderId));
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new BadRequestException("Đơn hàng đã bị hủy");
+        }
+        order.setStatus(newStatus);
+        String currentNote = order.getNote() != null ? order.getNote() : "";
+        order.setNote(currentNote + " [Hệ thống: Admin cập nhật trạng thái thành " + newStatus + "]");
+
+        Order savedOrder = orderRepository.save(order);
+        List<OrderItemResponseDTO> itemResponseDTOS = new ArrayList<>();
+        for (OrderItem item : savedOrder.getOrderItems()) {
+            String mainImageUrl = null;
+            List<ProductImage> productImages = productImageRepository.findByProductId(item.getProduct().getId());
+            for (ProductImage img : productImages) {
+                mainImageUrl = img.getImageUrl();
+                break;
+            }
+            OrderItemResponseDTO orderItemResponseDTO = OrderItemResponseDTO.builder()
+                    .id(item.getId())
+                    .productId(item.getProduct().getId())
+                    .productName(item.getProduct().getName())
+                    .productImageUrl(mainImageUrl)
+                    .productVariantId(item.getProductVariant().getId())
+                    .variantName(item.getProductVariant().getVariantName())
+                    .quantity(item.getQuantity())
+                    .price(item.getPrice())
+                    .subtotal(item.getSubtotal())
+                    .build();
+            itemResponseDTOS.add(orderItemResponseDTO);
+        }
+        BigDecimal discountAmount = order.getTotalAmount().add(order.getShippingFee()).subtract(order.getFinalAmount());
+        return OrderResponseDTO.builder()
+                .id(order.getId())
+                .orderCode(order.getOrderCode())
+                .userId(order.getUser().getId())
+                .receiverName(order.getAddress().getReceiverName())
+                .phone(order.getAddress().getPhone())
+                .deliveryAddress(order.getAddress().getFullAddress())
+                .totalAmount(order.getTotalAmount())
+                .shippingFee(order.getShippingFee())
+                .discountAmount(discountAmount)
+                .finalAmount(order.getFinalAmount())
+                .status(order.getStatus())
+                .note(order.getNote())
+                .createdAt(order.getCreatedAt())
+                .payment(PaymentResponseDTO.builder()
+                        .paymentMethod(order.getPaymentMethod())
+                        .status(order.getPaymentStatus())
+                        .amount(order.getFinalAmount())
+                        .transactionId(null)
+                        .paidAt(null)
+                        .build())
+                .items(itemResponseDTOS)
+                .build();
+    }
+
+    @Override
+    public BigDecimal getTotalRevenue() {
+        // tìm các đơn hàng đã giao thành công
+        BigDecimal total = orderRepository.calculateTotalRevenueByStatus(OrderStatus.DELIVERED);
+        if (total == null) {
+            return BigDecimal.ZERO;
+        }
+        return total;
     }
 }

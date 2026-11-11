@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 
 @Service
@@ -24,4 +25,8 @@ public interface IOrderService {
     OrderResponseDTO getOrderByCode(String orderCode);
 
     Page<OrderResponseDTO> getAllOrdersForAdmin(OrderStatus status, int page, int size);
+
+    OrderResponseDTO updateOrderStatus (Long orderId, OrderStatus orderStatus);
+
+    BigDecimal getTotalRevenue();
 }

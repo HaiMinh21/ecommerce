@@ -23,4 +23,9 @@ public interface IOrderController {
 
     // Admin lấy toàn bộ danh sách đơn hàng
     ResponseEntity<Page<OrderResponseDTO>> getAllOrdersForAdmin(OrderStatus orderStatus, int page, int size);
+
+    ResponseEntity<OrderResponseDTO> updateOrderStatus (Long orderId, OrderStatus newStatus);
+
+    // Thống kê doanh thu thực tế
+    ResponseEntity getTotalRevenue();
 }
