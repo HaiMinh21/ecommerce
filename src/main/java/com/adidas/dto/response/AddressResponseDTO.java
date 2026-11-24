@@ -1,19 +1,13 @@
 package com.adidas.dto.response;
 
-import lombok.*;
+import com.adidas.entity.Address;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class AddressResponseDTO {
-    private Long id;
-    private String receiverName;
-    private String phone;
-    private String addressLine;
-    private String ward;
-    private String district;
-    private String city;
-    private Boolean isDefault;
+public record AddressResponseDTO(Long id, Long userId, String receiverName, String phone,
+                                 String addressLine, String ward, String district, String city,
+                                 Boolean isDefault) {
+    public static AddressResponseDTO from(Address address) {
+        return new AddressResponseDTO(address.getId(), address.getUser().getId(),
+                address.getReceiverName(), address.getPhone(), address.getAddressLine(),
+                address.getWard(), address.getDistrict(), address.getCity(), address.getIsDefault());
+    }
 }

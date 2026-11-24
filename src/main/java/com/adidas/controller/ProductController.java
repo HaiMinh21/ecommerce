@@ -1,5 +1,7 @@
 package com.adidas.controller;
 
+import com.adidas.dto.response.BestSellingProductResponseDTO;
+
 import com.adidas.dto.request.ProductRequestDTO;
 import com.adidas.dto.response.ProductResponseDTO;
 import com.adidas.service.IProductService;
@@ -15,6 +17,12 @@ public class ProductController implements IProductController{
 
     @Autowired
     private IProductService productService;
+
+    @Override
+    @GetMapping("/best-selling")
+    public ResponseEntity<Page<BestSellingProductResponseDTO>> getBestSellingProducts(int page, int size) {
+        return ResponseEntity.ok(productService.getBestSellingProducts(page, size));
+    }
 
     @Override
     @PostMapping

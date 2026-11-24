@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -15,6 +17,30 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDenied(Exception ex, WebRequest request) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ErrorResponse.builder()
+                .timestamp(LocalDateTime.now()).status(403).error("Forbidden")
+                .message("Bạn không có quyền thực hiện thao tác này.")
+                .path(request.getDescription(false).replace("uri=", "")).build());
+    }
+
+    @ExceptionHandler(org.springframework.security.authentication.BadCredentialsException.class)
+    public ResponseEntity<ErrorResponse> handleBadCredentials(Exception ex, WebRequest request) {
+        return authenticationError("Invalid username or password", request);
+    }
+
+    @ExceptionHandler(org.springframework.security.authentication.AccountStatusException.class)
+    public ResponseEntity<ErrorResponse> handleAccountStatus(Exception ex, WebRequest request) {
+        return authenticationError("Account is unavailable", request);
+    }
+
+    private ResponseEntity<ErrorResponse> authenticationError(String message, WebRequest request) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ErrorResponse.builder()
+                .timestamp(LocalDateTime.now()).status(401).error("Unauthorized")
+                .message(message).path(request.getDescription(false).replace("uri=", "")).build());
+    }
+
 //    Class này được gắn @RestControllerAdvice, nó sẽ tự động "đứng rình"
 //    và bắt lấy mọi Exception bị ném ra từ Controller hoặc Service, sau đó đóng gói lại thành ErrorResponse rồi trả về cho Frontend.
     @ExceptionHandler(ResourceNotFoundException.class)
@@ -63,6 +89,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> handleInvalidRequestParameter(Exception ex, WebRequest request) {
+        String parameter = ex instanceof MissingServletRequestParameterException missing
+                ? missing.getParameterName()
+                : ((MethodArgumentTypeMismatchException) ex).getName();
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .message("Tham số không hợp lệ hoặc còn thiếu: " + parameter)
+                .path(request.getDescription(false).replace("uri=", ""))
+                .build();
+        return ResponseEntity.badRequest().body(errorResponse);
+    }
     // 4. Bắt toàn bộ các lỗi chưa được định nghĩa khác (HTTP 500)
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)

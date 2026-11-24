@@ -67,6 +67,9 @@ public class Order {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
     // Khớp tên cột update_at trong DB
     @UpdateTimestamp
     @Column(name = "update_at")

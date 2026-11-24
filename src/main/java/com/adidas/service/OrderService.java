@@ -3,6 +3,7 @@ package com.adidas.service;
 import com.adidas.dto.request.OrderRequestDTO;
 import com.adidas.dto.response.OrderItemResponseDTO;
 import com.adidas.dto.response.OrderResponseDTO;
+import com.adidas.dto.response.MonthlyRevenueResponseDTO;
 import com.adidas.dto.response.PaymentResponseDTO;
 import com.adidas.entity.*;
 import com.adidas.exception.BadRequestException;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.awt.font.FontRenderContext;
+import com.adidas.dto.response.MonthlyRevenueDTO;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -48,10 +50,10 @@ public class OrderService implements IOrderService {
         if (cart.getCartItems() == null || cart.getCartItems().isEmpty()) {
             throw new BadRequestException("Giỏ hàng của bạn đang trống. Không thể đặt hàng");
         }
-        Users user = userRepository.findById(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
+        Users user = userRepository.findByIdForUpdate(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
 
         // kiểm tra địa chỉ và mã giảm giá
-        Address address = addressRepository.findById(orderRequestDTO.getAddressId()).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa chỉ giao hàng"));
+        Address address = addressRepository.findByIdAndUserId(orderRequestDTO.getAddressId(), userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa chỉ giao hàng"));
 
         Coupon coupon = null;
         BigDecimal cartTotal = cart.getTotalPrice();
@@ -202,19 +204,14 @@ public class OrderService implements IOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponseDTO cancelOrder(Long userId, Long orderId) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng của bạn"));
+        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng của bạn"));
         if (!order.getUser().getId().equals(userId)) {
             throw new BadRequestException("Bạn không có quyền hủy đơn hàng của người khác");
         }
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new BadRequestException("Chỉ có thể hủy đơn hàng ở trạng thái chờ xác nhận (Pending). Trạng thái hiện tại: " + order.getStatus());
         }
-        // tra lại số lượng tồn kho
-        for (OrderItem item : order.getOrderItems()) {
-            ProductVariant variant = item.getProductVariant();
-            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-            productVariantRepository.save(variant);
-        }
+        restoreStock(order);
         // cập nhật trạng thái đơn hàng
         order.setStatus(OrderStatus.CANCELLED);
 
@@ -459,11 +456,15 @@ public class OrderService implements IOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponseDTO updateOrderStatus(Long orderId, OrderStatus newStatus) {
-        Order order = orderRepository.findById(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn có ID là: " + orderId));
-        if (order.getStatus() == OrderStatus.CANCELLED) {
-            throw new BadRequestException("Đơn hàng đã bị hủy");
+        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn có ID là: " + orderId));
+        validateStatusTransition(order.getStatus(), newStatus);
+        if (newStatus == OrderStatus.CANCELLED) {
+            restoreStock(order);
         }
         order.setStatus(newStatus);
+        if (newStatus == OrderStatus.DELIVERED) {
+            order.setDeliveredAt(LocalDateTime.now());
+        }
         String currentNote = order.getNote() != null ? order.getNote() : "";
         order.setNote(currentNote + " [Hệ thống: Admin cập nhật trạng thái thành " + newStatus + "]");
 
@@ -513,6 +514,50 @@ public class OrderService implements IOrderService {
                         .build())
                 .items(itemResponseDTOS)
                 .build();
+    }
+
+    private void validateStatusTransition(OrderStatus currentStatus, OrderStatus newStatus) {
+        if (currentStatus == null || newStatus == null) {
+            throw new BadRequestException("Trạng thái đơn hàng không được để trống");
+        }
+        boolean allowed = switch (currentStatus) {
+            case PENDING -> newStatus == OrderStatus.PROCESSING || newStatus == OrderStatus.CANCELLED;
+            case PROCESSING -> newStatus == OrderStatus.SHIPPING || newStatus == OrderStatus.CANCELLED;
+            case SHIPPING -> newStatus == OrderStatus.DELIVERED;
+            case DELIVERED -> newStatus == OrderStatus.RETURNED;
+            case CANCELLED, RETURNED -> false;
+        };
+        if (!allowed) {
+            throw new BadRequestException("Không thể chuyển trạng thái đơn hàng từ "
+                    + currentStatus + " sang " + newStatus);
+        }
+    }
+
+    private void restoreStock(Order order) {
+        for (OrderItem item : order.getOrderItems()) {
+            ProductVariant variant = item.getProductVariant();
+            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+            productVariantRepository.save(variant);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MonthlyRevenueResponseDTO getMonthlyRevenue(int year) {
+        if (year < 1000 || year > 9998) {
+            throw new BadRequestException("Năm thống kê phải nằm trong khoảng 1000 đến 9998");
+        }
+        LocalDateTime start = LocalDateTime.of(year, 1, 1, 0, 0);
+        LocalDateTime end = start.plusYears(1);
+        List<MonthlyRevenueDTO> months = new ArrayList<>();
+        for (int month = 1; month <= 12; month++) {
+            months.add(new MonthlyRevenueDTO(month, 0L, BigDecimal.ZERO));
+        }
+        for (var row : orderRepository.calculateMonthlyRevenue(OrderStatus.DELIVERED, start, end)) {
+            months.set(row.getMonth() - 1,
+                    new MonthlyRevenueDTO(row.getMonth(), row.getTotalOrders(), row.getRevenue()));
+        }
+        return new MonthlyRevenueResponseDTO(year, "VND", List.copyOf(months));
     }
 
     @Override

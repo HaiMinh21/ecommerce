@@ -2,6 +2,7 @@ package com.adidas.controller;
 
 import com.adidas.dto.request.OrderRequestDTO;
 import com.adidas.dto.response.OrderResponseDTO;
+import com.adidas.dto.response.MonthlyRevenueResponseDTO;
 import com.adidas.entity.OrderStatus;
 import com.adidas.service.IOrderService;
 import jakarta.validation.Valid;
@@ -66,6 +67,12 @@ public class OrderController implements IOrderController{
     }
 
     @Override
+    @GetMapping("/admin/revenue/monthly")
+    public ResponseEntity<MonthlyRevenueResponseDTO> getMonthlyRevenue(@RequestParam int year) {
+        return ResponseEntity.ok(orderService.getMonthlyRevenue(year));
+    }
+
+    @Override
     @GetMapping("/admin/revenue")
     public ResponseEntity getTotalRevenue() {
         BigDecimal totalRevenue = orderService.getTotalRevenue();
@@ -76,3 +83,4 @@ public class OrderController implements IOrderController{
         return ResponseEntity.ok(response);
     }
 }
+

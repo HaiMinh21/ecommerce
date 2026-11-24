@@ -2,6 +2,7 @@ package com.adidas.service;
 
 import com.adidas.dto.request.OrderRequestDTO;
 import com.adidas.dto.response.OrderResponseDTO;
+import com.adidas.dto.response.MonthlyRevenueResponseDTO;
 import com.adidas.entity.Order;
 import com.adidas.entity.OrderStatus;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,8 @@ public interface IOrderService {
     Page<OrderResponseDTO> getAllOrdersForAdmin(OrderStatus status, int page, int size);
 
     OrderResponseDTO updateOrderStatus (Long orderId, OrderStatus orderStatus);
+
+    MonthlyRevenueResponseDTO getMonthlyRevenue(int year);
 
     BigDecimal getTotalRevenue();
 }

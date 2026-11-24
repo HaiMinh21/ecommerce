@@ -1,22 +1,15 @@
 package com.adidas.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
-import lombok.*;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class AddressRequestDTO {
-    @NotBlank(message = "Tên người nhận không được để trống")
-    private String receiverName;
-    @NotBlank(message = "Số điện thoại không được để trống")
-    private String phone;
-    @NotBlank(message = "Địa chỉ không được để trống")
-    private String addressLine;
-    private String ward;
-    private String district;
-    private String city;
-    private Boolean isDefault;
+public record AddressRequestDTO(
+        @NotBlank @Size(max = 150) String receiverName,
+        @NotBlank @Pattern(regexp = "^\\+?[0-9]{9,15}$", message = "Phone must contain 9 to 15 digits") String phone,
+        @NotBlank @Size(max = 255) String addressLine,
+        @NotBlank @Size(max = 255) String ward,
+        @NotBlank @Size(max = 255) String district,
+        @NotBlank @Size(max = 255) String city,
+        Boolean isDefault) {
 }

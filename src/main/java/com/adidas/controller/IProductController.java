@@ -1,5 +1,7 @@
 package com.adidas.controller;
 
+import com.adidas.dto.response.BestSellingProductResponseDTO;
+
 import com.adidas.dto.request.ProductRequestDTO;
 import com.adidas.dto.response.ProductResponseDTO;
 import jakarta.validation.Valid;
@@ -9,6 +11,11 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 public interface IProductController {
+    // lấy danh sách sản phẩm bán chạy
+    ResponseEntity<Page<BestSellingProductResponseDTO>> getBestSellingProducts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size);
+
 
     ResponseEntity<ProductResponseDTO> createProduct(@Valid @RequestBody ProductRequestDTO productRequestDTO);
 

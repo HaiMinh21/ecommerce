@@ -2,6 +2,7 @@ package com.adidas.controller;
 
 import com.adidas.dto.request.OrderRequestDTO;
 import com.adidas.dto.response.OrderResponseDTO;
+import com.adidas.dto.response.MonthlyRevenueResponseDTO;
 import com.adidas.entity.OrderStatus;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -27,5 +28,8 @@ public interface IOrderController {
     ResponseEntity<OrderResponseDTO> updateOrderStatus (Long orderId, OrderStatus newStatus);
 
     // Thống kê doanh thu thực tế
+    ResponseEntity<MonthlyRevenueResponseDTO> getMonthlyRevenue(int year);
+
+    // Tổng doanh thu của tất cả các đơn hàng đã giao thành công
     ResponseEntity getTotalRevenue();
 }

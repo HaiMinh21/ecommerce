@@ -1,5 +1,7 @@
 package com.adidas.service;
 
+import com.adidas.dto.response.BestSellingProductResponseDTO;
+
 import com.adidas.dto.request.ProductRequestDTO;
 import com.adidas.dto.request.ProductVariantRequestDTO;
 import com.adidas.dto.response.ProductResponseDTO;
@@ -38,6 +40,14 @@ public class ProductService implements IProductService{
         this.categoryRepository = categoryRepository;
         this.productImageRepository = productImageRepository;
         this.productVariantRepository = productVariantRepository;
+    }
+
+    @Override
+    public Page<BestSellingProductResponseDTO> getBestSellingProducts(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new BadRequestException("page must be >= 0 and size must be between 1 and 100");
+        }
+        return productRepository.findBestSellingProducts(OrderStatus.DELIVERED, PageRequest.of(page, size));
     }
 
     @Override
