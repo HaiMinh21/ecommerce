@@ -1,15 +1,16 @@
 package com.adidas.controller;
 
 import com.adidas.dto.request.CartItemRequestDTO;
-import com.adidas.dto.request.CartRequestDTO;
 import com.adidas.dto.response.CartResponseDTO;
 import com.adidas.service.ICartService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping(value = "/api/v1/carts")
+@PreAuthorize("#userId == principal.user.id")
 public class CartController implements ICartController {
 
     private final ICartService cartService;

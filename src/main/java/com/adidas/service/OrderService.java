@@ -1,27 +1,34 @@
 package com.adidas.service;
 
 import com.adidas.dto.request.OrderRequestDTO;
+import com.adidas.dto.request.ShippingUpdateRequestDTO;
+import com.adidas.dto.response.MonthlyRevenueDTO;
 import com.adidas.dto.response.OrderItemResponseDTO;
 import com.adidas.dto.response.OrderResponseDTO;
 import com.adidas.dto.response.MonthlyRevenueResponseDTO;
 import com.adidas.dto.response.PaymentResponseDTO;
+import com.adidas.dto.response.ShippingResponseDTO;
 import com.adidas.entity.*;
 import com.adidas.exception.BadRequestException;
 import com.adidas.exception.ResourceNotFoundException;
+import com.adidas.payment.ShopeePayProperties;
 import com.adidas.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
-import java.awt.font.FontRenderContext;
-import com.adidas.dto.response.MonthlyRevenueDTO;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class OrderService implements IOrderService {
 
     private final IOrderRepository orderRepository;
@@ -31,27 +38,24 @@ public class OrderService implements IOrderService {
     private final IAddressRepository addressRepository;
     private final ICouponRepository couponRepository;
     private final IProductImageRepository productImageRepository;
-
-    public OrderService(IOrderRepository orderRepository, ICartRepository cartRepository, IProductVariantRepository productVariantRepository, IUserRepository userRepository, IAddressRepository addressRepository, ICouponRepository couponRepository, IProductImageRepository productImageRepository) {
-        this.orderRepository = orderRepository;
-        this.cartRepository = cartRepository;
-        this.productVariantRepository = productVariantRepository;
-        this.userRepository = userRepository;
-        this.addressRepository = addressRepository;
-        this.couponRepository = couponRepository;
-        this.productImageRepository = productImageRepository;
-    }
+    private final IShippingRepository shippingRepository;
+    private final IPaymentRepository paymentRepository;
+    private final IShopeePayIntentRepository shopeePayIntents;
+    private final ShopeePayProperties shopeePaySettings;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponseDTO checkout(Long userId, OrderRequestDTO orderRequestDTO) {
+        boolean shopeePay = orderRequestDTO.getPaymentMethod() == PaymentMethod.SHOPEEPAY;
+        if (shopeePay && !shopeePaySettings.isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "ShopeePay chưa được cấu hình");
+        }
+        Users user = userRepository.findByIdForUpdate(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
         // Lấy và kiểm tra giỏ hàng
         Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng"));
         if (cart.getCartItems() == null || cart.getCartItems().isEmpty()) {
             throw new BadRequestException("Giỏ hàng của bạn đang trống. Không thể đặt hàng");
         }
-        Users user = userRepository.findByIdForUpdate(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng"));
-
         // kiểm tra địa chỉ và mã giảm giá
         Address address = addressRepository.findByIdAndUserId(orderRequestDTO.getAddressId(), userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy địa chỉ giao hàng"));
 
@@ -144,6 +148,13 @@ public class OrderService implements IOrderService {
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0 ) {
             finalAmount = BigDecimal.ZERO;
         }
+        if (shopeePay) {
+            finalAmount = finalAmount.setScale(0, RoundingMode.HALF_UP);
+            discountAmount = totalAmount.add(shippingFee).subtract(finalAmount);
+            if (finalAmount.signum() == 0) {
+                order.setPaymentStatus(PaymentStatus.PAID);
+            }
+        }
         order.setFinalAmount(finalAmount);
 
         Order savedOrder = orderRepository.save(order);
@@ -204,10 +215,9 @@ public class OrderService implements IOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponseDTO cancelOrder(Long userId, Long orderId) {
-        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng của bạn"));
-        if (!order.getUser().getId().equals(userId)) {
-            throw new BadRequestException("Bạn không có quyền hủy đơn hàng của người khác");
-        }
+        Order order = orderRepository.findByIdAndUserIdForUpdate(orderId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng của bạn"));
+        validateShopeePayCancellation(order);
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new BadRequestException("Chỉ có thể hủy đơn hàng ở trạng thái chờ xác nhận (Pending). Trạng thái hiện tại: " + order.getStatus());
         }
@@ -335,8 +345,17 @@ public class OrderService implements IOrderService {
     }
 
     @Override
-    public OrderResponseDTO getOrderByCode(String orderCode) {
-        Order order = orderRepository.findByOrderCode(orderCode).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn với mã : " + orderCode));
+    @Transactional(readOnly = true)
+    public OrderResponseDTO getOrderByCode(String orderCode, Long userId, boolean admin) {
+        var matchingOrder = admin ? orderRepository.findByOrderCode(orderCode)
+                : orderRepository.findByOrderCodeAndUserId(orderCode, userId);
+        Order order = matchingOrder.orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng"));
+        ShippingResponseDTO shipping = shippingRepository.findByOrderId(order.getId())
+                .map(this::shippingResponse)
+                .orElse(null);
+        Payment payment = order.getPaymentMethod() == PaymentMethod.COD || order.getPaymentMethod() == PaymentMethod.SHOPEEPAY
+                ? paymentRepository.findByOrderIdAndPaymentMethod(order.getId(), order.getPaymentMethod()).orElse(null)
+                : null;
         List<OrderItemResponseDTO> itemResponseDTOS = new ArrayList<>();
         for (OrderItem item : order.getOrderItems()) {
             String mainImageUrl = null;
@@ -378,14 +397,9 @@ public class OrderService implements IOrderService {
                 .status(order.getStatus())
                 .note(order.getNote())
                 .createdAt(order.getCreatedAt())
-                .payment(PaymentResponseDTO.builder()
-                        .paymentMethod(order.getPaymentMethod())
-                        .status(order.getPaymentStatus())
-                        .amount(order.getFinalAmount())
-                        .transactionId(null)
-                        .paidAt(null)
-                        .build())
+                .payment(paymentResponse(order, payment))
                 .items(itemResponseDTOS)
+                .shipping(shipping)
                 .build();
     }
 
@@ -456,15 +470,29 @@ public class OrderService implements IOrderService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderResponseDTO updateOrderStatus(Long orderId, OrderStatus newStatus) {
-        Order order = orderRepository.findByIdForUpdate(orderId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy hóa đơn có ID là: " + orderId));
+        Order order = lockOrder(orderId);
         validateStatusTransition(order.getStatus(), newStatus);
+        if (newStatus == OrderStatus.CANCELLED) {
+            validateShopeePayCancellation(order);
+        } else if (newStatus == OrderStatus.PROCESSING || newStatus == OrderStatus.SHIPPING
+                || newStatus == OrderStatus.DELIVERED) {
+            requireShopeePayPayment(order);
+        }
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        ShippingStatus shippingStatus = switch (newStatus) {
+            case SHIPPING -> ShippingStatus.PICKED_UP;
+            case DELIVERED -> ShippingStatus.DELIVERED;
+            case CANCELLED -> ShippingStatus.FAILED;
+            default -> null;
+        };
+        if (shippingStatus != null) {
+            shippingRepository.findByOrderId(orderId)
+                    .ifPresent(shipping -> applyShippingStatus(shipping, shippingStatus, now));
+        }
         if (newStatus == OrderStatus.CANCELLED) {
             restoreStock(order);
         }
-        order.setStatus(newStatus);
-        if (newStatus == OrderStatus.DELIVERED) {
-            order.setDeliveredAt(LocalDateTime.now());
-        }
+        setOrderStatus(order, newStatus, now);
         String currentNote = order.getNote() != null ? order.getNote() : "";
         order.setNote(currentNote + " [Hệ thống: Admin cập nhật trạng thái thành " + newStatus + "]");
 
@@ -513,6 +541,159 @@ public class OrderService implements IOrderService {
                         .paidAt(null)
                         .build())
                 .items(itemResponseDTOS)
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public ShippingResponseDTO updateShipping(Long orderId, ShippingUpdateRequestDTO request) {
+        Order order = lockOrder(orderId);
+        requireShopeePayPayment(order);
+        OrderStatus orderStatus = order.getStatus();
+        ShippingStatus requestedStatus = request.status();
+        if (orderStatus != OrderStatus.PROCESSING && orderStatus != OrderStatus.SHIPPING
+                && !(orderStatus == OrderStatus.DELIVERED && requestedStatus == ShippingStatus.DELIVERED)) {
+            throw new BadRequestException("Không thể cập nhật vận đơn ở trạng thái đơn hàng " + orderStatus);
+        }
+
+        Shipping shipping = shippingRepository.findByOrderId(orderId).orElseGet(Shipping::new);
+        shipping.setOrder(order);
+        shipping.setShippingFee(order.getShippingFee());
+        shipping.setShippingProvider(request.shippingProvider().strip());
+        shipping.setTrackingNumber(request.trackingNumber().strip());
+
+        LocalDateTime now = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS);
+        applyShippingStatus(shipping, requestedStatus, now);
+        if (orderStatus == OrderStatus.PROCESSING
+                && (requestedStatus == ShippingStatus.PICKED_UP || requestedStatus == ShippingStatus.IN_TRANSIT)) {
+            setOrderStatus(order, OrderStatus.SHIPPING, now);
+        }
+        if (orderStatus == OrderStatus.SHIPPING && requestedStatus == ShippingStatus.DELIVERED) {
+            setOrderStatus(order, OrderStatus.DELIVERED, now);
+        }
+        return shippingResponse(shippingRepository.save(shipping));
+    }
+
+    @Override
+    @Transactional
+    public PaymentResponseDTO confirmCodPayment(Long orderId) {
+        Order order = lockOrder(orderId);
+        if (order.getPaymentMethod() != PaymentMethod.COD) {
+            throw new BadRequestException("Đơn hàng không sử dụng phương thức thanh toán COD");
+        }
+
+        Payment payment = paymentRepository.findByOrderIdAndPaymentMethod(orderId, PaymentMethod.COD)
+                .orElseGet(Payment::new);
+        if (order.getPaymentStatus() == PaymentStatus.REFUNDED || payment.getStatus() == PaymentStatus.REFUNDED) {
+            throw new BadRequestException("Đơn hàng đã được hoàn tiền");
+        }
+        if (order.getPaymentStatus() == PaymentStatus.PAID) {
+            return paymentResponse(order, payment);
+        }
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new BadRequestException("Chỉ xác nhận thu tiền COD khi đơn hàng đã giao thành công");
+        }
+
+        if (payment.getStatus() != PaymentStatus.PAID) {
+            payment.setOrder(order);
+            payment.setPaymentMethod(PaymentMethod.COD);
+            payment.setAmount(order.getFinalAmount());
+            payment.setStatus(PaymentStatus.PAID);
+            payment.setPaidAt(LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS));
+            payment = paymentRepository.save(payment);
+        }
+        order.setPaymentStatus(PaymentStatus.PAID);
+        return paymentResponse(order, payment);
+    }
+
+    private PaymentResponseDTO paymentResponse(Order order, Payment payment) {
+        PaymentResponseDTO.PaymentResponseDTOBuilder response = PaymentResponseDTO.builder()
+                .paymentMethod(order.getPaymentMethod())
+                .status(order.getPaymentStatus())
+                .amount(order.getFinalAmount());
+        if (payment != null) {
+            response.id(payment.getId())
+                    .transactionId(payment.getTransactionId())
+                    .paidAt(payment.getPaidAt());
+        }
+        return response.build();
+    }
+
+    private Order lockOrder(Long orderId) {
+        return orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đơn hàng có ID: " + orderId));
+    }
+
+    private void validateShopeePayCancellation(Order order) {
+        if (order.getPaymentMethod() != PaymentMethod.SHOPEEPAY) {
+            return;
+        }
+        if (order.getPaymentStatus() == PaymentStatus.PAID && order.getFinalAmount().signum() > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Đơn đã thanh toán ShopeePay cần được hoàn tiền trước khi hủy");
+        }
+        if (shopeePayIntents.findById(order.getId())
+                .filter(intent -> intent.getState() != ShopeePayIntent.State.CLOSED).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cần đối soát ShopeePay trước khi hủy đơn");
+        }
+    }
+
+    private void requireShopeePayPayment(Order order) {
+        if (order.getPaymentMethod() == PaymentMethod.SHOPEEPAY && order.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Đơn hàng chưa thanh toán ShopeePay");
+        }
+    }
+
+    private void setOrderStatus(Order order, OrderStatus status, LocalDateTime now) {
+        order.setStatus(status);
+        if (status == OrderStatus.DELIVERED) {
+            order.setDeliveredAt(now);
+        }
+    }
+
+    private void applyShippingStatus(Shipping shipping, ShippingStatus status, LocalDateTime now) {
+        if (shipping.getStatus() == null) {
+            shipping.setStatus(ShippingStatus.WAITING);
+        }
+        ShippingStatus current = shipping.getStatus();
+        if (current == status) {
+            return;
+        }
+        boolean allowed = switch (current) {
+            case WAITING -> status == ShippingStatus.PICKED_UP || status == ShippingStatus.IN_TRANSIT
+                    || status == ShippingStatus.FAILED;
+            case PICKED_UP -> status == ShippingStatus.IN_TRANSIT || status == ShippingStatus.DELIVERED
+                    || status == ShippingStatus.FAILED;
+            case IN_TRANSIT -> status == ShippingStatus.DELIVERED || status == ShippingStatus.FAILED;
+            case FAILED -> status == ShippingStatus.WAITING;
+            case DELIVERED -> false;
+        };
+        if (!allowed) {
+            throw new BadRequestException("Không thể chuyển trạng thái vận đơn từ " + current + " sang " + status);
+        }
+
+        shipping.setStatus(status);
+        switch (status) {
+            case WAITING -> shipping.setShippedAt(null);
+            case PICKED_UP, IN_TRANSIT -> {
+                if (shipping.getShippedAt() == null) {
+                    shipping.setShippedAt(now);
+                }
+            }
+            case DELIVERED -> shipping.setDeliveredAt(now);
+            default -> { }
+        }
+    }
+
+    private ShippingResponseDTO shippingResponse(Shipping shipping) {
+        return ShippingResponseDTO.builder()
+                .id(shipping.getId())
+                .orderId(shipping.getOrder().getId())
+                .shippingProvider(shipping.getShippingProvider())
+                .trackingNumber(shipping.getTrackingNumber())
+                .shippingFee(shipping.getShippingFee())
+                .status(shipping.getStatus())
+                .shippedAt(shipping.getShippedAt())
+                .deliveredAt(shipping.getDeliveredAt())
                 .build();
     }
 

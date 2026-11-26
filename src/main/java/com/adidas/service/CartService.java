@@ -154,11 +154,8 @@ public class CartService implements ICartService {
     @Transactional
     public CartResponseDTO updateCartItemQuantity(Long userId, Long cartItemId, Integer quantity) {
         Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng!"));
-        CartItem cartItem = cartItemRepository.findById(cartItemId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm trong giỏ hàng"));
-
-        if (!cartItem.getCart().getId().equals(cart.getId())) {
-            throw new BadRequestException("Sản phẩm không thuộc giỏ hàng của bạn");
-        }
+        CartItem cartItem = cartItemRepository.findByIdAndCartId(cartItemId, cart.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm trong giỏ hàng"));
         if (quantity <= 0) {
             return removeCartItem(userId, cartItemId);
         }
@@ -175,11 +172,8 @@ public class CartService implements ICartService {
     @Transactional
     public CartResponseDTO removeCartItem(Long userId, Long cartItemId) {
         Cart cart = cartRepository.findByUserId(userId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy giỏ hàng"));
-        CartItem cartItem = cartItemRepository.findById(cartItemId).orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm trong giỏ hàng"));
-
-        if (!cartItem.getCart().getId().equals(cart.getId())) {
-            throw new BadRequestException("Sản phẩm không thuộc giỏ hàng của bạn");
-        }
+        CartItem cartItem = cartItemRepository.findByIdAndCartId(cartItemId, cart.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy sản phẩm trong giỏ hàng"));
         cartItemRepository.delete(cartItem);
         cart.getCartItems().remove(cartItem);
         recalculateCartTotal(cart);

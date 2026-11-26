@@ -1,9 +1,12 @@
 package com.adidas.dto.request;
 
 import com.adidas.entity.ShippingStatus;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
-public class ShippingUpdateRequestDTO {
-    private String shippingProvider;
-    private String trackingNumber;
-    private ShippingStatus status;
+public record ShippingUpdateRequestDTO(
+        @NotBlank @Size(max = 100) String shippingProvider,
+        @NotBlank @Size(max = 100) String trackingNumber,
+        @NotNull ShippingStatus status) {
 }

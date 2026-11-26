@@ -1,5 +1,5 @@
 package com.adidas.entity;
 
 public enum PaymentStatus {
-    PENDING, PAID, UNPAID, REFUNDED
+    PENDING, PAID, UNPAID, REFUNDED, FAILED
 }

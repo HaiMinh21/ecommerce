@@ -2,6 +2,7 @@ package com.adidas.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -103,6 +105,20 @@ public class GlobalExceptionHandler {
                 .build();
         return ResponseEntity.badRequest().body(errorResponse);
     }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadableRequestBody(WebRequest request) {
+        return handleBadRequestException(new BadRequestException("Nội dung yêu cầu không hợp lệ"), request);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        return ResponseEntity.status(status).body(ErrorResponse.builder()
+                .timestamp(LocalDateTime.now()).status(status.value()).error(status.getReasonPhrase())
+                .message(ex.getReason()).path(request.getDescription(false).replace("uri=", "")).build());
+    }
+
     // 4. Bắt toàn bộ các lỗi chưa được định nghĩa khác (HTTP 500)
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)

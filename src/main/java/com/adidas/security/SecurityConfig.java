@@ -39,9 +39,13 @@ public class SecurityConfig {
                         // 1. Public API: Đăng nhập, Đăng ký, Xem danh sách sản phẩm
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/shopeepay/webhook").permitAll()
 
                         // 2. Admin API: Chỉ ROLE_ADMIN mới được gọi
                         .requestMatchers("/api/v1/orders/admin/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/products/**", "/api/v1/category/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/products/**", "/api/v1/category/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**", "/api/v1/category/**").hasRole("ADMIN")
 
                         // 3. Customer API: Bắt buộc phải có JWT hợp lệ (cả User và Admin đều dùng được)
                         .requestMatchers("/api/v1/carts/**", "/api/v1/orders/**").authenticated()

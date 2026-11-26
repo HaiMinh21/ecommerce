@@ -26,6 +26,10 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
     @Query("SELECT o FROM Order o WHERE o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") Long id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM Order o WHERE o.id = :id AND o.user.id = :userId")
+    Optional<Order> findByIdAndUserIdForUpdate(@Param("id") Long id, @Param("userId") Long userId);
+
     @Query("""
             SELECT MONTH(o.deliveredAt) AS month, COUNT(o.id) AS totalOrders,
                    SUM(o.finalAmount) AS revenue
@@ -42,6 +46,8 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
 
     // tìm đơn hàng theo mã giao dịch
     Optional<Order> findByOrderCode(String orderCode);
+
+    Optional<Order> findByOrderCodeAndUserId(String orderCode, Long userId);
 
     Page<Order> findByUserId(Long userId, Pageable pageable);
 

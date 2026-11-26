@@ -1,6 +1,7 @@
 package com.adidas.dto.response;
 
 import com.adidas.entity.OrderStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -33,4 +34,7 @@ public class OrderResponseDTO {
 
     private List<OrderItemResponseDTO> items;
     private PaymentResponseDTO payment;
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ShippingResponseDTO shipping;
 }
