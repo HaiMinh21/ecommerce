@@ -39,7 +39,8 @@ public class SecurityConfig {
                         // 1. Public API: Đăng nhập, Đăng ký, Xem danh sách sản phẩm
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/shopeepay/webhook").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/payments/shopeepay/webhook",
+                                "/api/v1/payments/sepay/webhook").permitAll()
 
                         // 2. Admin API: Chỉ ROLE_ADMIN mới được gọi
                         .requestMatchers("/api/v1/orders/admin/**").hasRole("ADMIN")

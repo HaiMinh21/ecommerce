@@ -13,7 +13,8 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 @Entity
-@Table(name = "payments")
+@Table(name = "payments", uniqueConstraints = @UniqueConstraint(
+        name = "uk_payments_method_transaction", columnNames = {"payment_method", "transaction_id"}))
 @NoArgsConstructor
 @AllArgsConstructor
 public class  Payment {

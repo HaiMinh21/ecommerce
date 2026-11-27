@@ -49,6 +49,8 @@ public interface IOrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByOrderCodeAndUserId(String orderCode, Long userId);
 
+    Optional<Order> findByIdAndUserId(Long id, Long userId);
+
     Page<Order> findByUserId(Long userId, Pageable pageable);
 
     // lấy đơn hàng của user theo trạng thái: đang giao, đã hủy

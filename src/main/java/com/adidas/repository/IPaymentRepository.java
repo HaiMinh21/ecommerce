@@ -13,6 +13,8 @@ public interface IPaymentRepository extends JpaRepository<Payment, Long> {
 
     Optional<Payment> findByOrderIdAndPaymentMethod(Long orderId, PaymentMethod paymentMethod);
 
+    boolean existsByPaymentMethodAndTransactionId(PaymentMethod paymentMethod, String transactionId);
+
     // đối soát với cổng thanh toán (VNPAY/ MOMO) khi gọi webhook tả kết quả
     Optional<Payment> findByTransactionId(String transactionId);
 }
